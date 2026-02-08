@@ -1,0 +1,201 @@
+尝试一直uboot到rk3566
+
+root
+n58XskMt
+
+添加的修改的代码都有一个注释
+shaco_add
+
+make ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
+rk3566编译
+可以将这两个添加到makefile里面
+
+/home/shaco/u-boot-2024.10/dts/upstream/src/arm64/rockchip 路径下看看找一个
+ 
+在rk3566的sdk中find ./ -name "rk3566-firefly*"
+找到了一些firefly的相关的dts
+
+https://6xyun.cn/article/orangepi-3b-uboot
+
+修改makefile,添加
+ARCH=arm
+CROSS_COMPILE=aarch64-linux-gnu-
+不用每次都写了
+
+拷贝出来一个dtb文件,尝试做一些修改
+
+0x4000 0x2000 uboot
+0x6000 0x2000 misc
+0x8000 0x20000 boot_a
+0x28000 0x20000 boot_b
+0x48000 0x10000 backup
+0x58000 0x200000 system_a
+0x258000 0x200000 system_b
+0x458000 0x40000 oem
+0x498000 0x1886fc0 userdata
+
+修改的uboot烧录进去可以开机了,但是引导mmc1失败了,要看一下dtb
+
+开启安卓要开启cmdline的abootimg
+
+查看相关的gnl代码,其中rockusb.c的gnl注册要改一下名字
+
+uboot放弃了,这个感觉我不行
+
+原始的uboot+kernel
+Kernel command line: storagemedia=emmc androidboot.storagemedia=emmc androidboot.mode=normal  androidboot.verifiedbootstate=orange skip_initramfs androidboot.slot_suffix=_a androidboot.serialno=e3bbf55a7ff958e0  no_console_suspend rw rootwait earlycon=uart8250,mmio32,0xfe660000 console=ttyFIQ0 
+
+我编译的uboot+原始的kernel
+Kernel command line: storagemedia=emmc androidboot.storagemedia=emmc androidboot.mode=normal androidboot.verifiedbootstate=orange skip_initramfs androidboot.slot_suffix=_a androidboot.serialno=e3bbf55a7ff958e0  no_console_suspend rw rootwait earlycon=uart8250,mmio32,0xfe660000 console=ttyFIQ0 androidboot.fwver=ddr-v1.23-03ea844c5d,spl-v1.14,bl31-v1.45,bl32-v2.15,uboot-b14196eade-12/07/2025 root=PARTUUID=dd4b0000-0000-4e37-8000-571500000bfa
+
+kernel移植6.12.61,修改几个地方
+makefile添加arck=arm64,cross_compile=
+arch\arm64\makefile 添加MAKE_MODULES,参考 https://blog.csdn.net/A_salted_fisher/article/details/148500681 这个是生成boot.img的
+scripts 拷贝 mking mkbooting 和resource_tool的源文件,同时修改makefile 添加 hostprogs-always-$(CONFIG_ARCH_ROCKCHIP)            += resource_tool
+目前编译通过启动了,但是卡在了 can't open /dev/ttyFIQ0: No such file or directory ,还不知道是哪里搞得
+先把设备树的电压配一下
+
+先试试原厂的cmdline,先把设备树这些搞定
+目前看到Android_ab.c里面添加root=PARTUUID这里,这个是有的
+还有就是serialno暂时不知道怎么修改的,先把fiq的驱动打开看看吧,这个驱动.....要移植
+去掉了FIQ0,还是提示没有,估计是rootfs需要这个....
+移植了rockchip 6.1的内核的fiq_debugger,然后做一下修改,可以跑进去了,但是现在卡在了
+[    0.779290] Run /sbin/init as init process
+[    0.881208] EXT4-fs (mmcblk0p6): re-mounted 8ff7a962-91e2-4ea6-a5ff-889cca2ae2c5.
+[    0.937127] /dev/block/by-name/oem: Can't lookup blockdev
+[    0.938202] /dev/block/by-name/userdata: Can't lookup blockdev
+要看一下原始内核这是怎么做的
+
+妈的,修改了fstab为/dev/mmcblk2p8,然后bootargs="earlycon=uart8250,mmio32,0xfe660000 console=ttyFIQ0"可以正常进入终端了.......参考https://github.com/mfkiwl/rk-open-docs/blob/master/UART/Rockchip_Developer_Guide_UART_CN.md的设置
+其实不是bootargts错了,是发现这个androidboot.serialno=写错了,但是之前看是对的,我上面搞错了,实际上没问题
+DMI的问题也没有了,关闭就好了
+
+
+driver:
+流程:
+platform_driver_register
+	__platform_driver_register
+		driver_register
+			driver_detach
+				bus_for_each_dev遍历device
+					__driver_attach
+						driver_probe_device
+							__driver_probe_device
+								really_probe
+									call_driver_probe-->查看是bus的device还是非bus的,然后调用probe函数
+
+device:
+https://blog.csdn.net/heli200482128/article/details/126974048
+设备树节点的注册流程:
+start_kernel
+-----arch_call_rest_init
+----------rest_init
+----------------kernel_init
+----------------------kernel_init_freeable
+-------------------------------do_basic_setup
+--------------------------------------do_initcalls
+---------------------------------------------do_initcall_level
+-----------------------------------------------------do_one_initcall
+of_platform_populate-->of_platform_bus_create-->of_platform_device_create_pdata-->of_device_add-->device_add-->bus_add_device完成设备添加到bus节点
+
+
+[    0.112251] gpio gpiochip0: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.113635] rockchip-gpio fdd60000.gpio: probed /pinctrl/gpio@fdd60000
+[    0.114813] gpio gpiochip1: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.116018] rockchip-gpio fe740000.gpio: probed /pinctrl/gpio@fe740000
+[    0.117056] gpio gpiochip2: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.118202] rockchip-gpio fe750000.gpio: probed /pinctrl/gpio@fe750000
+[    0.119322] gpio gpiochip3: Static allocation of GPIO base is deprecated, use dynamic allocation.
+[    0.120478] rockchip-gpio fe760000.gpio: probed /pinctrl/gpio@fe760000
+[    0.121515] gpio gpiochip4: Static allocation of GPIO base is deprecated, use dynamic allocation.
+不支持静态的了,修改了代码,无效,可能要删除基础设备树的信息
+查看代码是在rockchip_pinctrl_get_soc_data这里面,强行赋值的pin_base,看看注释掉行不行?
+还是不能注释掉,这个是生成节点的,必须保留!看了rk的kernel代码,这个打印给注释了.....所以不用管了
+
+platform_get_irq_byname这里没有找到对应的irq中断,要看一下
+这个看着没啥问题,后面的代码又去注册了,现在是输入PC会卡住,看这个regs是空的,不知道是不是这个问题
+fiq-debugger的问题解决了,找不到fiq无所谓,内核不支持fiq中断,卡住的原因是regs为空,将判断CONFIG_NO_GKI的地方修改了,强制regs用get_irq_regs()返回就行了
+
+尝试将波特率改成115200
+1,cat rkbin/RKBOOT/RK3566MINIALL.ini记录path1的值bin/rk35/rk3566_ddr_1056MHz_v1.23.bin
+	修改rkbin/tools/ddrbin_param.txt的uart baudrate=115200
+	编译新的ddr bin,在tool文件夹下./ddrbin_tool.py rk3566 ddrbin_param.txt ../bin/rk35/rk3568_ddr_1560MHz_v1.23.bin
+2,修改boot的,直接修改configs/rk3568_dsb66_defconfig的CONFIG_BAUDRATE=115200
+	然后编译./make.sh rk3568_dsb66
+3,修改kernel的
+	修改设备树arch/arm64/boot/dts/rockchip/rk3566-shaco-dsb66.dts的fiq部分,fiq-debugger-->rockchip,baudrate = <115200>;
+按上述方法修改成功
+
+[    0.425974] fan53555-regulator 0-001c: error -ENXIO: Failed to get chip ID!
+这个好像是没有初始化风扇,这个不是风扇,是pmic,把对应的menuconfig去掉就可以了
+路径:
+	Device Driver
+		Voltage and Current Regulator Support
+			Fairchild FAN53555 Regulator
+但是查看代码和原理图,这个貌似是通过fan53555进行初始化控制的,可能还是要打开,看一下为啥不行
+找了一个网页-->https://blog.csdn.net/wb4916/article/details/147463196
+结构体struct fan53555_device_info添加struct regmap *regmap;
+函数fan53555_regulator_probe
+添加以下代码
+	di->regmap = regmap;
+	di->dev = &client->dev;
+	i2c_set_clientdata(client, di);
+
+	/* test chip */
+	ret = regmap_read(di->regmap, FAN53555_ID1, &val);
+	if (ret < 0) {
+		printk("fan53555 test 0x%x failed\n",client->addr);
+	}
+	else {
+		printk("fan53555 test 0x%x succes\n",client->addr);
+		if (0x1c == client->addr)
+			di->vendor = FAN53526_VENDOR_TCS;
+		else
+			di->vendor = FAN53555_VENDOR_SILERGY;
+		goto test_out;
+	};
+	
+	
+	client->addr = 0x40;
+	ret = regmap_read(di->regmap, FAN53555_ID1, &val);
+	if (ret < 0) {
+		//printk("fan53555 test 0x40 failed\n");
+		printk("fan53555 test 0x%x failed\n",client->addr);
+	}
+	else {
+		//printk("fan53555 test 0x40 succes\n");
+		//di->vendor = FAN53555_VENDOR_SILERGY;
+		printk("fan53555 test 0x%x succes\n",client->addr);
+		if (0x1c == client->addr)
+			di->vendor = FAN53526_VENDOR_TCS;
+		else
+			di->vendor = FAN53555_VENDOR_SILERGY;
+		goto test_out;
+	};
+	
+	test_out:
+后面是
+  /* Get chip ID */
+    ret = regmap_read(regmap, FAN53555_ID1, &val);
+然后就可以正常识别了,我擦,貌似是芯片型号搞错了.....addr应该是0x40,改回去试一下,型号是syr827,修改为syr827可以了.....
+
+下一个问题,drivers/firmware/smccc/soc_id.c里面出现了ARCH_SOC_ID not implemented, skipping ....,在上面的文件里面,看看相关的知识
+https://www.cnblogs.com/arnoldlu/p/14211367.html
+这个TE-OPP的版本是0x10002,smccc_conduit=2,没有smc和HVC,无法初始化,去掉吧
+Device Drivers 
+		Firmware Drivers
+				SoC bus device for the ARM SMCCC SOC_ID
+1,rk809声卡
+2,sd卡
+3,sdio WiFi
+
+sd卡
+https://www.cnblogs.com/zyly/p/17723757.html 看看这个资料
+https://blog.csdn.net/CATTLE_L/article/details/145266866
+https://blog.csdn.net/huang_165/article/details/86550606
+https://doc.embedfire.com/lubancat-rk/hardware/ebf_lubancat_rk_hardware/zh/latest/_downloads/d81b42d3347fd3854e991665d34f713f/LubanCat1N_EBF410052V1_SCH_20221212.pdf
+看这个原理图差不多,试试用rk3566-lubancat-1.dts配置看看
+还是用原始的dts,还是dts配置的问题
+
+sdio wifi
+这个wifi reg脚要改一下,wake up脚也要改一下
