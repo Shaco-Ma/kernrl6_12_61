@@ -197,5 +197,111 @@ https://doc.embedfire.com/lubancat-rk/hardware/ebf_lubancat_rk_hardware/zh/lates
 看这个原理图差不多,试试用rk3566-lubancat-1.dts配置看看
 还是用原始的dts,还是dts配置的问题
 
+尝试同步一下相关的设备树信息:
+	对比原厂和移植的,还有鲁班猫的,将相关的gpio这些修改一下,改好了,目前WiFi和HDMI貌似还不行
+
+声卡播放
+	gst-play-1.0 --audiosink="alsasink device=hw:0,0" 001.mp3
+	gst-play-1.0 --audiosink="alsasink device=hw:1,0" 001.mp3
+声卡不用rk809,用pcm5102a虚拟声卡
+声卡有点复杂,打开了Dummy的配置,看是有声卡了-->那个是假的,还是要移植
+移植了官方的dummy-codec.c的驱动,然后需要打开i2s-tdm.....rk3566和rk3568只支持tdm协议
+我移植的:
+aplay -l
+**** List of PLAYBACK Hardware Devices ****
+card 0: rockchipi2s1dum [rockchip,i2s1-dummy-codec], device 0: fe410000.i2s-dummy_codec dummy_codec-0 [fe410000.i2s-dummy_codec dummy_codec-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+目前看执行aplay会出错,如下,原始的也会出现这个错误
+ALSA lib pulse.c:242:(pulse_connect) PulseAudio: Unable to connect: Connection refused
+aplay: main:828: audio open error: Connection refused
+原始的:是有两个声卡设备,少了一个HDMI的,HDMI sound的代码可能要移植
+aplay -l
+**** List of PLAYBACK Hardware Devices ****
+card 0: rockchiphdmi [rockchip,hdmi], device 0: rockchip,hdmi i2s-hifi-0 [rockchip,hdmi i2s-hifi-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 1: rockchipi2s1dum [rockchip,i2s1-dummy-codec], device 0: fe410000.i2s-dummy_codec dummy-codec-0 [fe410000.i2s-dummy_codec dummy-codec-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+录音设备:
+arecord -l
+**** List of CAPTURE Hardware Devices ****
+card 1: rockchipi2s1dum [rockchip,i2s1-dummy-codec], device 0: fe410000.i2s-dummy_codec dummy-codec-0 [fe410000.i2s-dummy_codec dummy-codec-0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+目前dummy_codec已经OK,可以正常播放了,节点生成不可以是因为对应的控制gpio不对,gpio的设置要先在pinctrl定义gpio和对应的上拉下拉等,然后再定义一个节点,使用pinctrl-0来引用gpio节点,这样才有效,其他的一些属性,貌似不能再pinctrl里面写
+HDMI sound移植的问题:
+	看了代码,官方的方法是自己写的驱动获取节点信息,用devm_snd_soc_register_card注册的声卡,但是主线kernel是用了simple card的方式(类似dummy codec),如果用dummy codec的方式,就要把dai的信息补全,这里面涉及到了音频的格式,是否有办法忽略这个呢?或者用手动注册的方式将dt的信息修改一下?同时注意到~/kernel-6.12.61/sound/soc/codecs/hdmi-codec.c有关于hdmi codec的文件,是否可以用该方法,将dts的信息修改?(打算先用这一个方式)
+	移植进来的rockchip_hdmi.c感觉不太对,问了ai是配置好之后自动生成的
+	新发现,这个SND_SOC_HDMI_CODEC默认是m的方式,是不是这个原因?-->LD [M]  sound/soc/codecs/snd-soc-hdmi-codec.ko
+	暂时还没有找到解决办法,目前看还是解析节点错误,因为没有对应的类似dummy_codec的驱动将驱动添加到dev,可能还真的需要用rockchip_hdmi.c的方法,只不过将对应的节点都改成simple开头的
+HDMI sound搞定了,不知道为什么产品代码中用这种自定义的方式,还写了一个驱动去加载数据
+	怎么搞定的,参考https://www.cnblogs.com/wanglongjiang/p/17997945 -->HDMI配置,打开相关的配置就可以了
+
 sdio wifi
 这个wifi reg脚要改一下,wake up脚也要改一下
+[    0.948507] sdhci: Secure Digital Host Controller Interface driver
+[    0.948533] sdhci: Copyright(c) Pierre Ossman
+[    0.950835] sdhci-pltfm: SDHCI platform and OF driver helper
+看着是初始化成功了,可能是驱动文件,要看一下
+大概的流程写一下,最后发现是设备树的问题.....设备树写成了emmc的接口
+6.12已经有brcmfmac的接口了,使用brcmfmac接口去管理WiFi和蓝牙的驱动
+整体流程:
+	1,确定设备树的配置,从uboot找到那个是emmc的,gpio不能写错,刚开始是把emmc的gpio接口写成了sdmmc1的了
+		同时要加上中断gpio控制,修改为如下sdmmc1
+		&sdmmc1 {
+			max-frequency = <50000000>;
+			supports-sdio;
+			bus-width = <4>;
+			disable-wp;
+			cap-sd-highspeed;
+			//cap-sdio-irq;
+			keep-power-in-suspend;
+			mmc-pwrseq = <&sdio_pwrseq>;
+			non-removable;
+			pinctrl-names = "default";
+			pinctrl-0 = <&sdmmc1_bus4 &sdmmc1_clk &sdmmc1_cmd &wifi_host_wake_h>;
+			sd-uhs-sdr104;
+			vmmc-supply = <&vcc3v3_sys>;
+			vqmmc-supply = <&vcca1v8_pmu>;
+			status = "okay";
+			//interrupt-parent = <&gpio2>;
+			//interrupts = <RK_PB2 IRQ_TYPE_LEVEL_LOW>;
+			//interrupt-names = "host-wake";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			brcmf: wifi@1 {
+				compatible = "brcm,bcm4329-fmac";
+				reg = <1>;
+				interrupt-parent = <&gpio2>;
+				interrupts = <RK_PB2 IRQ_TYPE_LEVEL_LOW>;
+				interrupt-names = "host-wake";
+			};
+		};
+		pinctrl下的
+			wifi {
+				wifi_host_wake_h: wifi-host-wake-h {
+					//rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
+					rockchip,pins = <2 RK_PB2 RK_FUNC_GPIO &pcfg_pull_none>;
+				};
+			};
+	2,打开brcmfmac的配置
+		CONFIG_BRCMUTIL
+		CONFIG_BRCMFMAC
+		CONFIG_BRCMFMAC_SDIO
+		CONFIG_BRCM_TRACING
+		CONFIG_CFG80211 / CONFIG_MAC80211
+	  蓝牙相关:
+		CONFIG_BT
+		CONFIG_BT_HCIUART
+		CONFIG_BT_HCIUART_BCM
+		CONFIG_SERIAL_DEV_BUS
+		CONFIG_BT_BCM(旧版驱动)
+	3,存放相关驱动文件
+		地址https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/brcm
+		将brcmfmac43456-sdio.bin,brcmfmac43456-sdio.txt两个文件放到/lib/firmware/brcm/目录下
+		重启即可出现wlan0
+		
+看一下相关的USB吧
+	现在看这几个gpio都没有拉高

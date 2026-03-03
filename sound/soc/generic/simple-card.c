@@ -535,14 +535,17 @@ static int simple_parse_of(struct simple_util_priv *priv, struct link_info *li)
 	int ret;
 
 	ret = simple_util_parse_widgets(card, PREFIX);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
 	ret = simple_util_parse_routing(card, PREFIX);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
 	ret = simple_util_parse_pin_switches(card, PREFIX);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
@@ -551,18 +554,22 @@ static int simple_parse_of(struct simple_util_priv *priv, struct link_info *li)
 	ret = simple_for_each_link(priv, li,
 				   simple_dai_link_of,
 				   simple_dai_link_of_dpcm);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
 	ret = simple_util_parse_card_name(card, PREFIX);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
 	ret = simple_populate_aux(priv);
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 	if (ret < 0)
 		return ret;
 
 	ret = snd_soc_of_parse_aux_devs(card, PREFIX "aux-devs");
+	//printk(KERN_ERR "%d--ret = %d\n", __LINE__, ret);
 
 	return ret;
 }
@@ -757,6 +764,7 @@ static int simple_probe(struct platform_device *pdev)
 	if (np && of_device_is_available(np)) {
 
 		ret = simple_parse_of(priv, li);
+		//printk(KERN_ERR "ret = %d\n", ret);
 		if (ret < 0) {
 			dev_err_probe(dev, ret, "parse error\n");
 			goto err;
