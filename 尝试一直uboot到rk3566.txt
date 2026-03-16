@@ -302,6 +302,11 @@ sdio wifi
 		地址https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/brcm
 		将brcmfmac43456-sdio.bin,brcmfmac43456-sdio.txt两个文件放到/lib/firmware/brcm/目录下
 		重启即可出现wlan0
+蓝牙还在看为啥不行
+	蓝牙的配置编译为M了,同时对应的gpio端口写反了,如下
+/sys/kernel/debug/pinctrl/pinctrl-rockchip-pinctrl
+	查看gpio的状态信息,目前节点有了,但是不能scan on
+	操,原来是host和device wakeup写反了.....
 		
 看一下相关的USB吧
 	现在看这几个gpio都没有拉高
