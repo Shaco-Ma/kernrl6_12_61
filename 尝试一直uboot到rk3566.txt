@@ -304,9 +304,102 @@ sdio wifi
 		重启即可出现wlan0
 蓝牙还在看为啥不行
 	蓝牙的配置编译为M了,同时对应的gpio端口写反了,如下
-/sys/kernel/debug/pinctrl/pinctrl-rockchip-pinctrl
+/sys/kernel/debug/pinctrl/pinctrl-rockchip-pinctrl/pinmux-pins
 	查看gpio的状态信息,目前节点有了,但是不能scan on
-	操,原来是host和device wakeup写反了.....
-		
+	......,原来是host和device wakeup写反了.....
+
 看一下相关的USB吧
-	现在看这几个gpio都没有拉高
+1. USB 3.0 OTG 控制器与 SATA_0 控制器复⽤ USB3/SATA Combo PHY_0;
+2. USB 3.0 Host_1 控制器与 SATA_1/QSGMII 控制器复⽤ USB3/SATA/QSGMII Combo PHY_1;
+3. USB 3.0 OTG 控制器与 USB 3.0 Host_1 控制器分别使⽤ USB 2.0 Comb PHY_0 的 port0 和 port1；
+4. USB 2.0 Host_2 控制器与 USB 2.0 Host_3 控制器分别使⽤ USB 2.0 Comb PHY_1 的 port0 和 port1；
+
+usb_host0_ohci,usb_host0_ehci 对应的是USB 2.0 Host_2-->对应的是usb2 phy1 port0 -->3566的板子上面只接了一个usb2_host2
+usb_host1_ohci,usb_host1_ehci 对应的是USB 2.0 Host_3-->对应的是usb2 phy1 port1 -->没接,所以不用了
+
+//这个不知道对不对,可以试着一个一个的开试一下
+USB 2.0 OTG → 电源控制节点应关联到 &usb2phy0_otg 的 phy-supply。		-->usb_host0_xhci
+USB 3.0 Host → 电源控制节点应关联到 &usb2phy0_host 的 phy-supply。		-->usb_host1_xhci
+USB 2.0 Host_2 → 电源控制节点应关联到 &usb2phy1_otg 的 phy-supply。	-->usb_host0_ohci,usb_host0_ehci
+USB 2.0 Host_3 → 电源控制节点应关联到 &usb2phy1_host 的 phy-supply。	-->usb_host1_ohci,usb_host1_ehci
+
+xhci是3.0的接口,一个对应otg2.0,一个对应host3.0,3566只支持otg2.0
+所以	usb_host0_xhci 是对应的otg2.0,可以连接到type口实现otg功能,
+	usb_host1_xhci 是host3.0端口
+usb3.0还不行,5v是有了
+usb3.0的问题就是需要指定速率.....文档有说只能到480m,但是没想到是这种方式
+完整的USB配置如下
+&combphy1 {
+	status = "okay";
+};
+
+&combphy2 {
+	status = "okay";
+	//status = "disabled";
+};
+
+&usb2phy1 {
+	status = "okay";
+};
+
+//usb2.0 host2
+&usb2phy1_otg {
+	phy-supply = <&vcc5v0_usb20_host>;
+	status = "okay";
+};
+
+//对应的是USB 2.0 Host_2-->对应的是usb2 phy1 port0
+&usb_host0_ehci {
+	status = "okay";
+};
+
+&usb_host0_ohci {
+	status = "okay";
+};
+//usb2.0 host2
+
+//usb2.0 host3
+//&usb2phy1_host {
+//	phy-supply = <&vcc5v0_usb20_host>;
+//	status = "okay";
+//};
+
+//对应的是USB 2.0 Host_3-->对应的是usb2 phy1 port1
+//&usb_host1_ehci {
+//	status = "okay";
+//};
+//
+//&usb_host1_ohci {
+//	status = "okay";
+//};
+//usb2.0 host3
+
+&usb2phy0 {
+	status = "okay";
+};
+//xhci是3.0的接口,一个对应otg2.0,一个对应host3.0,3566只支持otg2.0
+//所以这个是otg2.0
+&usb_host0_xhci {
+	//dr_mode = "host";
+	status = "okay";
+};
+
+&usb2phy0_otg {
+	phy-supply = <&vcc5v0_usb_otg>;
+	status = "okay";
+};
+
+//host3.0端口
+&usb_host1_xhci {
+	phys = <&usb2phy0_host>;
+	//phy-names = "usb3-phy";
+	//phy-names = "usb2-phy";
+	maximum-speed = "high-speed";
+	status = "okay";
+};
+
+&usb2phy0_host {
+	phy-supply = <&vcc5v0_usb30_host>;
+	status = "okay";
+};
+单个开一下这些电源,看看是不是都对照的对的

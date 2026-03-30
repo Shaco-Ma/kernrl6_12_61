@@ -1341,6 +1341,7 @@ static int dwc3_core_init(struct dwc3 *dwc)
 	dwc3_writel(dwc->regs, DWC3_GUID, LINUX_VERSION_CODE);
 
 	ret = dwc3_phy_setup(dwc);
+	//dev_err(dwc->dev, "%d--ret = %d\n", __LINE__, ret);
 	if (ret)
 		return ret;
 
@@ -1350,6 +1351,7 @@ static int dwc3_core_init(struct dwc3 *dwc)
 			if (ret == -ETIMEDOUT) {
 				dwc3_core_soft_reset(dwc);
 				ret = -EPROBE_DEFER;
+				//dev_err(dwc->dev, "%d--ret = %d\n", __LINE__, ret);
 			}
 			return ret;
 		}
@@ -1358,12 +1360,14 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 	if (!dwc->phys_ready) {
 		ret = dwc3_core_get_phy(dwc);
+		//dev_err(dwc->dev, "%d--ret = %d\n", __LINE__, ret);
 		if (ret)
 			goto err_exit_ulpi;
 		dwc->phys_ready = true;
 	}
 
 	ret = dwc3_phy_init(dwc);
+	//dev_err(dwc->dev, "%d--ret = %d\n", __LINE__, ret);
 	if (ret)
 		goto err_exit_ulpi;
 
@@ -1512,6 +1516,7 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 	u8 i;
 
 	if (node) {
+		//printk(KERN_ERR "node:%s\n", node->name);
 		dwc->usb2_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 0);
 		dwc->usb3_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 1);
 	} else {
@@ -1524,7 +1529,10 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 		if (ret == -ENXIO || ret == -ENODEV)
 			dwc->usb2_phy = NULL;
 		else
+		{
+			//printk(KERN_ERR "no usb2 phy configured\n");
 			return dev_err_probe(dev, ret, "no usb2 phy configured\n");
+		}
 	}
 
 	if (IS_ERR(dwc->usb3_phy)) {
@@ -1532,7 +1540,10 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 		if (ret == -ENXIO || ret == -ENODEV)
 			dwc->usb3_phy = NULL;
 		else
+		{
+			//printk(KERN_ERR "no usb3 phy configured\n");
 			return dev_err_probe(dev, ret, "no usb3 phy configured\n");
+		}
 	}
 
 	for (i = 0; i < dwc->num_usb2_ports; i++) {
@@ -1541,14 +1552,18 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 		else
 			snprintf(phy_name, sizeof(phy_name),  "usb2-%u", i);
 
+		//printk(KERN_ERR "%d---phy_name = %s---%d\n", __LINE__, phy_name, dwc->num_usb2_ports);
 		dwc->usb2_generic_phy[i] = devm_phy_get(dev, phy_name);
 		if (IS_ERR(dwc->usb2_generic_phy[i])) {
 			ret = PTR_ERR(dwc->usb2_generic_phy[i]);
 			if (ret == -ENOSYS || ret == -ENODEV)
 				dwc->usb2_generic_phy[i] = NULL;
 			else
+			{
+				//printk(KERN_ERR "failed to lookup phy = %s\n", phy_name);
 				return dev_err_probe(dev, ret, "failed to lookup phy %s\n",
 							phy_name);
+			}
 		}
 	}
 
@@ -1558,14 +1573,18 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 		else
 			snprintf(phy_name, sizeof(phy_name), "usb3-%u", i);
 
+		//printk(KERN_ERR "%d---phy_name = %s---%d\n", __LINE__, phy_name, dwc->num_usb3_ports);
 		dwc->usb3_generic_phy[i] = devm_phy_get(dev, phy_name);
 		if (IS_ERR(dwc->usb3_generic_phy[i])) {
 			ret = PTR_ERR(dwc->usb3_generic_phy[i]);
 			if (ret == -ENOSYS || ret == -ENODEV)
 				dwc->usb3_generic_phy[i] = NULL;
 			else
+			{
+				//printk(KERN_ERR "failed to lookup phy %s\n", phy_name);
 				return dev_err_probe(dev, ret, "failed to lookup phy %s\n",
 							phy_name);
+			}
 		}
 	}
 
@@ -2263,7 +2282,7 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	ret = dwc3_core_init(dwc);
 	if (ret) {
-		dev_err_probe(dev, ret, "failed to initialize core\n");
+		//dev_err_probe(dev, ret, "failed to initialize core:%d\n", ret);
 		goto err_free_event_buffers;
 	}
 
