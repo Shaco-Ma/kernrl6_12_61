@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Character device configuration
+#
+
+menu "shaco test driver"
+
+config SHACO_GPIOKEY
+	tristate "gpio key for input, irq qu dou and so on"
+	default y
+	help
+	  driver use char and irq and input and so on
+
+endmenu
