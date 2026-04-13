@@ -113,7 +113,7 @@
 		simple-audio-card,format = "i2s";
 		simple-audio-card,name = "rockchip,i2s1-dummy-codec";
 		simple-audio-card,mclk-fs = <256>;
-		hp-det-gpio = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+		//hp-det-gpio = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
 
 		simple-audio-card,cpu {
 			sound-dai = <&i2s1_8ch>;
@@ -341,8 +341,8 @@
 
 	adc_keys: adc-keys {
 		compatible = "adc-keys";
-		pinctrl-names = "default";
-		pinctrl-0 = <&mcu_ch32_en &pcm5102_smt_en>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&mcu_ch32_en &pcm5102_smt_en>;
 		io-channels = <&saradc 0>;
 		io-channel-names = "buttons";
 		keyup-threshold-microvolt = <1800000>;
@@ -356,11 +356,27 @@
 	};
 
 	aimy_fan: aimy-fan {
-		status = "okay";
-		compatible = "aimy_fan";
+		//status = "okay";
+		//compatible = "aimy_fan";
+		#cooling-cells = <2>;
+		//cooling-levels = <0 25 95 145 195 255>;
+		cooling-levels = <0 120 150 180 210 255>;
+		fan-supply = <&vcc5v0_sys>;
+		compatible = "pwm-fan";
 		pwms = <&pwm4 0 10000000 0>;
 	};
+	//用gpio0 pc6测试一下
+	test_gpio_key {
+		compatible = "test,test-gpio";
+		test-gpios = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PC6 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+	};
+};
 
+&pwm4 {
+	status = "okay";
 };
 
 //&gic {
