@@ -11,4 +11,10 @@ config SHACO_GPIOKEY
 	help
 	  driver use char and irq and input and so on
 
+config GPIO_FAN
+	tristate "Set Gpio Up or Down"
+	default y
+	help
+	  driver use char
+
 endmenu

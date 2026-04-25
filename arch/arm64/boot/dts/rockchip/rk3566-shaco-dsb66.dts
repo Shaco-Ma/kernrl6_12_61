@@ -355,8 +355,9 @@
 		};
 	};
 
+	//写一个驱动,将这这个gpio拉低就行了 
 	aimy_fan: aimy-fan {
-		//status = "okay";
+		status = "disable";
 		//compatible = "aimy_fan";
 		#cooling-cells = <2>;
 		//cooling-levels = <0 25 95 145 195 255>;
@@ -373,10 +374,24 @@
 		interrupts = <RK_PC6 IRQ_TYPE_LEVEL_LOW>;
 		status = "disable";
 	};
+	gpio_fan {
+		compatible = "test,gpio_fan";
+		fan-gpios = <&gpio0 RK_PC3 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_fan_control_gnd>;
+		status = "okay";
+	};
+
+	ir-receiver {
+		compatible = "gpio-ir-receiver";
+		gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ir_receiver_pin>;
+	};
 };
 
 &pwm4 {
-	status = "okay";
+	status = "disable";
 };
 
 //&gic {
@@ -657,6 +672,8 @@
 				regulator-name = "vdda0v9_image";
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <900000>;
+				regulator-always-on;
+				regulator-boot-on;
 
 				regulator-state-mem {
 					regulator-off-in-suspend;
@@ -758,6 +775,8 @@
 				regulator-name = "vcca1v8_image";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
+				regulator-always-on;
+				regulator-boot-on;
 
 				regulator-state-mem {
 					regulator-off-in-suspend;
@@ -805,9 +824,9 @@
 	status = "disabled";
 };
 
-&i2c5 {
-	status = "okay";
-};
+//&i2c5 {
+//	status = "okay";
+//};
 
 &i2s0_8ch {
 	status = "okay";
@@ -1063,6 +1082,7 @@
 };
 
 &vp0 {
+	status = "okay";
 	vp0_out_hdmi: endpoint@ROCKCHIP_VOP2_EP_HDMI0 {
 		reg = <ROCKCHIP_VOP2_EP_HDMI0>;
 		remote-endpoint = <&hdmi_in_vp0>;
@@ -1122,6 +1142,18 @@
 	//		rockchip,pins = <1 RK_PB2 RK_FUNC_GPIO &pcfg_pull_none>;
 	//	};
 	//};
+
+	ir-receiver {
+		ir_receiver_pin: ir-receiver-pin {
+			rockchip,pins = <0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	gpio_fan {
+		gpio_fan_control_gnd: fan_gpio {
+			rockchip,pins = <0 RK_PC3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 
 	pmic {
 		pmic_int_l: pmic-int-l {
