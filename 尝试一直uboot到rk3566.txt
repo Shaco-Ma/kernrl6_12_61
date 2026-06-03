@@ -6,6 +6,9 @@ n58XskMt
 添加的修改的代码都有一个注释
 shaco_add
 
+假如dts的名字是rk3566-shaco-dsb66.img
+那么make O=build rk3566-shaco-dsb66.img
+
 make ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
 rk3566编译
 可以将这两个添加到makefile里面
